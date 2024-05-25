@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "foundational-tsmodel"
+version = "0.1.0"
+description = ""
+authors = ["Michael C. J. Kao <mkao006@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
