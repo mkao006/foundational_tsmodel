@@ -5,8 +5,8 @@ from darts.metrics.metrics import smape
 from darts.timeseries import TimeSeries
 from datasetsforecast.m4 import M4
 
-from evaluator import Evaluator
-from model import ChronosFoundationalModel, ForecastParam
+from src.evaluator import Evaluator
+from src.model import ChronosFoundationalModel, ForecastParam
 
 DATASET_DIRECTORY = "datasets"
 GROUP = "Monthly"

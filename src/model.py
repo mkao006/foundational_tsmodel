@@ -5,8 +5,8 @@ import torch
 from chronos import ChronosPipeline
 from pydantic import BaseModel
 
-from data import TSDataSchema
-from utils import timeit
+from src.data import TSDataSchema
+from src.utils import timeit
 
 
 class ForecastParam(BaseModel):

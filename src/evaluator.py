@@ -4,8 +4,8 @@ from typing import List, Dict, Callable
 import numpy as np
 import pandas as pd
 
-from data import TSDataSchema
-from model import ForecastModel
+from src.data import TSDataSchema
+from src.model import ForecastModel
 
 
 class Evaluator:
