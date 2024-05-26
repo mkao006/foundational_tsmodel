@@ -94,4 +94,4 @@ class ChronosFoundationalModel(ForecastModel):
         self.training_data = data
 
     def name(self) -> str:
-        return f'chronos_{self.model_name}'
+        return f"chronos_{self.model_name}"
