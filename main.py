@@ -1,11 +1,8 @@
 import json
 
-import pandas as pd
-from darts.metrics.metrics import smape
-from darts.timeseries import TimeSeries
 from datasetsforecast.m4 import M4
 
-from src.evaluator import Evaluator
+from src.evaluator import Evaluator, smape_metric
 from src.model import ChronosFoundationalModel, ForecastParam
 
 DATASET_DIRECTORY = "datasets"
@@ -31,11 +28,6 @@ chronosFMLarge = ChronosFoundationalModel(
 )
 
 
-# TODO (Michael): Write an adaptor decorator for Darts metric.
-def smape_metric(actual=pd.Series, predicted=pd.Series) -> float:
-    return smape(TimeSeries.from_series(actual), TimeSeries.from_series(predicted))
-
-
 evaluator = Evaluator(
     data=m4_datasets,
     models=[
@@ -43,8 +35,8 @@ evaluator = Evaluator(
         chronosFMLarge,
     ],
     metric=smape_metric,
-    sample_size=10,
-    train_window_size=12,
+    sample_size=50,
+    train_window_size=24,
     test_window_size=12,
 )
 

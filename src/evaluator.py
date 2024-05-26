@@ -1,8 +1,10 @@
 import warnings
-from typing import List, Dict, Callable
+from typing import Callable, Dict, List
 
 import numpy as np
 import pandas as pd
+from darts.metrics.metrics import smape
+from darts.timeseries import TimeSeries
 
 from src.data import TSDataSchema
 from src.model import ForecastModel
@@ -80,3 +82,8 @@ class Evaluator:
             train_end = window_start + train_window_size
             test_end = train_end + test_window_size
             return df.iloc[window_start:train_end], df.iloc[train_end:test_end]
+
+
+# TODO (Michael): Write an adaptor decorator for Darts metric.
+def smape_metric(actual=pd.Series, predicted=pd.Series) -> float:
+    return smape(TimeSeries.from_series(actual), TimeSeries.from_series(predicted))
