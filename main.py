@@ -1,12 +1,15 @@
 import json
+import os
 import warnings
 
 from datasetsforecast.m4 import M4
 
 from src.evaluator import Evaluator, smape_metric
-from src.model import ChronosFoundationalModel, NixtlaModel, ForecastParam
+from src.model import ChronosFoundationalModel, ForecastParam, NixtlaModel
 
 warnings.filterwarnings("ignore")
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
 DATASET_DIRECTORY = "datasets"
 GROUP = "Monthly"
 HORIZON = 12
@@ -31,22 +34,19 @@ chronosFMLarge = ChronosFoundationalModel(
     params=ForecastParam(**chronos_params),
 )
 
-
 # Initiate statstical models
+#
+# NOTE (MICHAEL): Somehow loading the statsforecast model package causes the
+#                 Chronos model to fail with segmentation fault 11 error.
+from statsforecast.models import AutoARIMA
+from statsforecast.models import CrostonClassic as Croston
+from statsforecast.models import DynamicOptimizedTheta as DOT
+from statsforecast.models import HistoricAverage, SeasonalNaive
+
 nixtla_stats_model_params = {
     "training_params": {"freq": "M"},
     "prediction_params": {"h": HORIZON},
 }
-
-# NOTE (MICHAEL): Somehow loading the statsforecast model package causes the
-#                 Chronos model to fail with segmentation fault 11 error.
-from statsforecast.models import (
-    AutoARIMA,
-    HistoricAverage,
-    SeasonalNaive,
-    DynamicOptimizedTheta as DOT,
-    CrostonClassic as Croston,
-)
 
 sfModels = [
     NixtlaModel(m, ForecastParam(**nixtla_stats_model_params))
@@ -59,13 +59,30 @@ sfModels = [
     ]
 ]
 
+from neuralforecast.auto import AutoNBEATS, AutoTiDE
+
+nixtla_neural_model_params = {
+    "training_params": {"freq": 1},
+    "prediction_params": {"h": HORIZON},
+}
+
+# Initiate NN models
+nfModels = [
+    NixtlaModel(m, ForecastParam(**nixtla_neural_model_params))
+    for m in [
+        AutoNBEATS(h=HORIZON),
+        AutoTiDE(h=HORIZON),
+    ]
+]
+
 evaluator = Evaluator(
     data=m4_datasets,
     models=[
-        # chronosFMSmall,
+        chronosFMSmall,
         # chronosFMLarge,
     ]
-    + sfModels,
+    + sfModels
+    + nfModels,
     metric=smape_metric,
     sample_size=50,
     train_window_size=24,
