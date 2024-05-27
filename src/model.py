@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Union
 
 import pandas as pd
 import torch
@@ -16,9 +17,18 @@ from src.data import TSDataSchema
 from src.utils import timeit
 
 
+# TODO (Michael): Rethink about the params
+class TrainingParams(BaseModel):
+    freq: Union[int, str]
+
+
+class PredictionParams(BaseModel):
+    h: int
+
+
 class ForecastParam(BaseModel):
-    training_params: dict
-    prediction_params: dict
+    training_params: TrainingParams
+    prediction_params: PredictionParams
 
 
 class ForecastModel(ABC):
@@ -74,7 +84,9 @@ class ChronosFoundationalModel(ForecastModel):
             ]
             context = torch.tensor(y)
             prediction = (
-                self.model.predict(context=context, **self.params.prediction_params)
+                self.model.predict(
+                    context=context, prediction_length=self.params.prediction_params.h
+                )
                 .mean(axis=1)
                 .tolist()[0]
             )
@@ -105,27 +117,42 @@ class ChronosFoundationalModel(ForecastModel):
 
 
 class NixtlaModel(ForecastModel):
-    def __init__(self, model, params: ForecastParam):
-        model_instance = self._instantiate_model(model)
+    def __init__(self, model: Union[sfbm, mlbm, nfbm], params: ForecastParam):
+        model_instance = self._instantiate_model(model=model, params=params)
         super().__init__(model_instance, params)
 
+    @timeit
     def predict(self) -> pd.DataFrame:
         if self.model_type == "sfbm":
-            self.model.forecast(self.training_data, h=self.params.prediction_params.h)
-        elif self.model_type == "mlbm":
-            self.model.predict(self.training_data, h=self.params.prediction_params.h)
-        else:
-            self.model.predict(self.training_data)
+            prediction = (
+                self.model.forecast(
+                    df=self.training_data, h=self.params.prediction_params.h
+                )
+                .reset_index()
+                .rename(columns={self.name(): TSDataSchema.y})
+            )
+            prediction[TSDataSchema.ds] = self._revert_date_to_int(
+                prediction[TSDataSchema.ds]
+            )
+            return prediction
 
+        elif self.model_type == "mlbm":
+            return self.model.predict(
+                new_df=self.training_data, h=self.params.prediction_params.h
+            )
+        else:
+            return self.model.predict(df=self.training_data)
+
+    @timeit
     def fit(self, data):
         self.training_data = data
         self.model.fit(self.training_data)
 
     def name(self) -> str:
         if self.model_type in ("sfbm", "nfbm"):
-            return self.model.__repr__()
+            return self.model.models[0].__repr__()
         else:
-            return _get_model_name(self.model)
+            return _get_model_name(self.model.models[0])
 
     def _set_model_type(self, model):
         """Set the model type.based on the baseclass of the input model"""
@@ -138,15 +165,33 @@ class NixtlaModel(ForecastModel):
         else:
             raise ValueError("model is not a supported type in Nixtla")
 
-    def _instantiate_model(self, model):
+    def _instantiate_model(self, model, params: ForecastParam):
+        """Instantiate the Nixtla modeul based on the model"""
         self._set_model_type(model)
         if self.model_type == "sfbm":
-            return StatsForecast(models=[model], freq=self.params.training_params.freq)
+            return StatsForecast(models=[model], freq=params.training_params.freq)
         elif self.model_type == "mlbm":
             return MLForecast(
                 models=[model],
-                freq=self.params.training_params.freq,
-                lags=self.params.training_params.lags,
+                freq=params.training_params.freq,
+                lags=params.training_params.lags,
             )
         else:
-            return NeuralForecast(models=[model], freq=self.params.training_params.freq)
+            return NeuralForecast(models=[model], freq=params.training_params.freq)
+
+    def _revert_date_to_int(self, s: pd.Series) -> pd.Series:
+        """The predict function converts int offset (1, 2, 3) to the
+        frequency since epoch time, this function converts it back.
+
+        """
+        return [
+            (
+                d.to_period(self.params.training_params.freq)
+                - pd.to_datetime("1970-01-01").to_period(
+                    self.params.training_params.freq
+                )
+            ).n
+            + self.training_data[TSDataSchema.ds].max()
+            + 1
+            for d in s
+        ]
