@@ -1,3 +1,4 @@
+import logging
 import warnings
 from typing import Callable, Dict, List
 
@@ -39,6 +40,7 @@ class Evaluator:
 
         result = {}
         for model in self.models:
+            logging.info(f"Evaluating model: {model.name()}")
             cumsum_metric = 0
             for train_set, test_set in self.sampled_df:
                 model.fit(train_set)
