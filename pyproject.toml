@@ -12,6 +12,10 @@ numpy = "^1.26.4"
 pandera = "^0.19.3"
 datasetsforecast = "^0.0.8"
 pydantic = "^2.7.1"
+statsforecast = "^1.7.5"
+neuralforecast = "^1.7.2"
+mlforecast = "^0.13.0"
+lightgbm = "^4.3.0"
 
 
 [build-system]
