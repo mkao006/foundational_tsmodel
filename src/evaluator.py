@@ -41,15 +41,19 @@ class Evaluator:
         result = {}
         for model in self.models:
             logging.info(f"Evaluating model: {model.name()}")
-            cumsum_metric = 0
-            for train_set, test_set in self.sampled_df:
-                model.fit(train_set)
-                prediction = model.predict()[TSDataSchema.y]
-                cumsum_metric += self.metric(
-                    test_set.reset_index()[TSDataSchema.y], prediction
-                )
-            average_metric = cumsum_metric / self.sample_size
-            result[model.name()] = average_metric
+            try:
+                cumsum_metric = 0
+                for train_set, test_set in self.sampled_df:
+                    model.fit(train_set)
+                    prediction = model.predict()[TSDataSchema.y]
+                    cumsum_metric += self.metric(
+                        test_set.reset_index()[TSDataSchema.y], prediction
+                    )
+                average_metric = cumsum_metric / self.sample_size
+                result[model.name()] = average_metric
+            except:
+                logging.info(f"Evalutation for {model.name()} failed.")
+                result[model.name()] = np.nan
         return result
 
     def _generate_sample(self):
