@@ -8,6 +8,7 @@ from mlforecast import MLForecast
 from mlforecast.core import _get_model_name
 from neuralforecast import NeuralForecast
 from neuralforecast.common._base_model import BaseModel as nfbm
+from neuralforecast.common._base_auto import BaseAuto as nfba
 from pydantic import BaseModel
 from sklearn.base import BaseEstimator as mlbm
 from statsforecast import StatsForecast
@@ -117,13 +118,28 @@ class ChronosFoundationalModel(ForecastModel):
 
 
 class NixtlaModel(ForecastModel):
+    """Nixtla offers three different packages focusing on different methods:
+
+    * statsForecast - traditional statstical methods.
+    * mlForecast - Machine learning (e.g. lgbm) based methods.
+    * nerualForecast - NN based methods.
+
+    Unfortunately they have very different interface and method, this class
+    attempts to unify the three modules in to a single unified interface for
+    our benchmark.
+
+    """
+    NFBM = "nfbm"
+    SFBM = "sfbm"
+    MLBM = "mlbm"
+
     def __init__(self, model: Union[sfbm, mlbm, nfbm], params: ForecastParam):
         model_instance = self._instantiate_model(model=model, params=params)
         super().__init__(model_instance, params)
 
     @timeit
     def predict(self) -> pd.DataFrame:
-        if self.model_type == "sfbm":
+        if self.model_type == self.SFBM:
             prediction = (
                 self.model.forecast(
                     df=self.training_data, h=self.params.prediction_params.h
@@ -136,20 +152,36 @@ class NixtlaModel(ForecastModel):
             )
             return prediction
 
-        elif self.model_type == "mlbm":
-            return self.model.predict(
-                new_df=self.training_data, h=self.params.prediction_params.h
+        elif self.model_type == self.MLBM:
+            prediction = (
+                self.model.predict(
+                    new_df=self.training_data, h=self.params.prediction_params.h
+                )
+                .reset_index()
+                .rename(columns={self.name(): TSDataSchema.y})
             )
+            return prediction
+        elif self.model_type == self.NFBM:
+            prediction = (
+                self.model.predict(df=self.training_data)
+                .reset_index()
+                .rename(columns={self.name(): TSDataSchema.y})
+            )
+            return prediction
         else:
-            return self.model.predict(df=self.training_data)
+            raise ValueError("model type undefined")
 
     @timeit
     def fit(self, data):
         self.training_data = data
+        if self.model_type == self.NFBM:
+            self.training_data[TSDataSchema.ds] = self.training_data[
+                TSDataSchema.ds
+            ].astype(int)
         self.model.fit(self.training_data)
 
     def name(self) -> str:
-        if self.model_type in ("sfbm", "nfbm"):
+        if self.model_type in (self.SFBM, self.NFBM):
             return self.model.models[0].__repr__()
         else:
             return _get_model_name(self.model.models[0])
@@ -157,20 +189,20 @@ class NixtlaModel(ForecastModel):
     def _set_model_type(self, model):
         """Set the model type.based on the baseclass of the input model"""
         if isinstance(model, sfbm):
-            self.model_type = "sfbm"
-        elif isinstance(model, nfbm):
-            self.model_type = "nfbm"
+            self.model_type = self.SFBM
+        elif isinstance(model, nfbm) or isinstance(model, nfba):
+            self.model_type = self.NFBM
         elif isinstance(model, mlbm):
-            self.model_type = "mlbm"
+            self.model_type = self.MLBM
         else:
             raise ValueError("model is not a supported type in Nixtla")
 
     def _instantiate_model(self, model, params: ForecastParam):
         """Instantiate the Nixtla modeul based on the model"""
         self._set_model_type(model)
-        if self.model_type == "sfbm":
+        if self.model_type == self.SFBM:
             return StatsForecast(models=[model], freq=params.training_params.freq)
-        elif self.model_type == "mlbm":
+        elif self.model_type == self.MLBM:
             return MLForecast(
                 models=[model],
                 freq=params.training_params.freq,
