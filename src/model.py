@@ -3,7 +3,14 @@ from abc import ABC, abstractmethod
 import pandas as pd
 import torch
 from chronos import ChronosPipeline
+from mlforecast import MLForecast
+from mlforecast.core import _get_model_name
+from neuralforecast import NeuralForecast
+from neuralforecast.common._base_model import BaseModel as nfbm
 from pydantic import BaseModel
+from sklearn.base import BaseEstimator as mlbm
+from statsforecast import StatsForecast
+from statsforecast.models import _TS as sfbm
 
 from src.data import TSDataSchema
 from src.utils import timeit
@@ -95,3 +102,51 @@ class ChronosFoundationalModel(ForecastModel):
 
     def name(self) -> str:
         return f"chronos_{self.model_name}"
+
+
+class NixtlaModel(ForecastModel):
+    def __init__(self, model, params: ForecastParam):
+        model_instance = self._instantiate_model(model)
+        super().__init__(model_instance, params)
+
+    def predict(self) -> pd.DataFrame:
+        if self.model_type == "sfbm":
+            self.model.forecast(self.training_data, h=self.params.prediction_params.h)
+        elif self.model_type == "mlbm":
+            self.model.predict(self.training_data, h=self.params.prediction_params.h)
+        else:
+            self.model.predict(self.training_data)
+
+    def fit(self, data):
+        self.training_data = data
+        self.model.fit(self.training_data)
+
+    def name(self) -> str:
+        if self.model_type in ("sfbm", "nfbm"):
+            return self.model.__repr__()
+        else:
+            return _get_model_name(self.model)
+
+    def _set_model_type(self, model):
+        """Set the model type.based on the baseclass of the input model"""
+        if isinstance(model, sfbm):
+            self.model_type = "sfbm"
+        elif isinstance(model, nfbm):
+            self.model_type = "nfbm"
+        elif isinstance(model, mlbm):
+            self.model_type = "mlbm"
+        else:
+            raise ValueError("model is not a supported type in Nixtla")
+
+    def _instantiate_model(self, model):
+        self._set_model_type(model)
+        if self.model_type == "sfbm":
+            return StatsForecast(models=[model], freq=self.params.training_params.freq)
+        elif self.model_type == "mlbm":
+            return MLForecast(
+                models=[model],
+                freq=self.params.training_params.freq,
+                lags=self.params.training_params.lags,
+            )
+        else:
+            return NeuralForecast(models=[model], freq=self.params.training_params.freq)
